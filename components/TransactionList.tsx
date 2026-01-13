@@ -1,7 +1,36 @@
 
 import React from 'react';
-import { Transaction, Category } from '../types';
-import { COLORS } from '../constants';
+
+// Define types locally since types.ts is no longer a module
+export enum Category {
+  FOOD = 'food',
+  TRANSPORT = 'transport',
+  SHOPPING = 'shopping',
+  ENTERTAINMENT = 'entertainment',
+  HOUSING = 'housing',
+  UTILITIES = 'utilities',
+  INCOME = 'income',
+  OTHER = 'other',
+}
+
+export interface Transaction {
+  id: string;
+  amount: number;
+  category: Category;
+  note: string;
+  date: string;
+  type: 'income' | 'expense';
+}
+
+// Define constants locally since constants.tsx is no longer a module
+const COLORS = {
+  orange: '#FF9500',
+  blue: '#007AFF',
+  pink: '#FF2D55',
+  indigo: '#5856D6',
+  green: '#34C759',
+  gray: '#8E8E93',
+};
 
 interface Props {
   transactions: Transaction[];
