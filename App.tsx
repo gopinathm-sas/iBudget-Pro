@@ -189,9 +189,10 @@ const App: React.FC = () => {
   }, [transactions]);
 
   const filteredHistory = useMemo(() => {
-    if (!searchQuery.trim()) return transactions;
+    const base = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    if (!searchQuery.trim()) return base;
     const q = searchQuery.toLowerCase();
-    return transactions.filter(t => 
+    return base.filter(t => 
       t.note.toLowerCase().includes(q) || 
       t.category.toLowerCase().includes(q)
     );
@@ -236,9 +237,9 @@ const App: React.FC = () => {
               <div className="flex overflow-x-auto px-6 gap-3 no-scrollbar scroll-smooth">
                 {insightItems.map((item, idx) => (
                   <div key={idx} className="min-w-[180px] bg-white p-4 rounded-[1.75rem] ios-shadow border border-blue-50/50 flex flex-col justify-between">
-                    <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center mb-3"><ICONS.Target /></div>
+                    <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center mb-3 text-[#007AFF]"><ICONS.Target /></div>
                     <p className="text-[13px] font-semibold text-gray-800 leading-tight">{item}</p>
-                    <div className="mt-3 text-[9px] font-black text-[#007AFF] uppercase tracking-widest">Action Tip</div>
+                    <div className="mt-3 text-[9px] font-black text-[#007AFF] uppercase tracking-widest">AI Observation</div>
                   </div>
                 ))}
               </div>
@@ -362,14 +363,10 @@ const App: React.FC = () => {
             </div>
             <div className="px-2 pt-2">
               <TransactionList transactions={filteredHistory} />
-              {filteredHistory.length === 0 && searchQuery && (
+              {filteredHistory.length === 0 && (
                 <div className="py-20 text-center">
-                  <div className="w-16 h-16 bg-gray-200/50 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                  </div>
-                  <p className="text-gray-500 font-semibold text-lg">No Results</p>
-                  <p className="text-gray-400 text-sm mt-1">Try searching for a different note or category.</p>
-                  <button onClick={() => setSearchQuery('')} className="text-[#007AFF] font-bold mt-6 px-6 py-2 bg-[#007AFF]/10 rounded-full">Clear Search</button>
+                   <p className="text-gray-500 font-semibold">{searchQuery ? 'No matches found' : 'No transactions yet'}</p>
+                   {searchQuery && <button onClick={() => setSearchQuery('')} className="text-[#007AFF] text-sm font-bold mt-2">Clear search</button>}
                 </div>
               )}
             </div>
@@ -386,63 +383,110 @@ const App: React.FC = () => {
 
       {/* Manual / AI Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 animate-in fade-in duration-300" onClick={() => setIsAddModalOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 animate-in fade-in duration-300" onClick={() => !isAnalyzing && setIsAddModalOpen(false)}>
           <div className="w-full max-w-md bg-[#F2F2F7] rounded-t-[3rem] p-6 animate-in slide-in-from-bottom duration-300 ios-shadow pb-12" onClick={e => e.stopPropagation()}>
             <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6" />
-            <h2 className="text-2xl font-bold mb-6">New Entry</h2>
+            <div className="flex justify-between items-center mb-6 px-1">
+              <h2 className="text-2xl font-bold">New Entry</h2>
+              {isAnalyzing && (
+                <div className="flex space-x-1.5 items-center">
+                   <div className="w-2 h-2 bg-[#007AFF] rounded-full animate-bounce [animation-duration:0.6s]"></div>
+                   <div className="w-2 h-2 bg-[#007AFF] rounded-full animate-bounce [animation-duration:0.6s] [animation-delay:0.15s]"></div>
+                   <div className="w-2 h-2 bg-[#007AFF] rounded-full animate-bounce [animation-duration:0.6s] [animation-delay:0.3s]"></div>
+                </div>
+              )}
+            </div>
             <div className="space-y-4">
-              <div className="bg-white rounded-2xl p-4 ios-shadow">
-                <input autoFocus className="w-full bg-transparent text-lg focus:outline-none font-medium" placeholder="Coffee for $5" value={note} onChange={(e) => setNote(e.target.value)} />
+              <div className="bg-white rounded-2xl p-4 ios-shadow focus-within:ring-2 focus-within:ring-[#007AFF]/20 transition-all">
+                <input 
+                  autoFocus 
+                  disabled={isAnalyzing}
+                  className="w-full bg-transparent text-lg focus:outline-none font-medium text-gray-900 placeholder:text-gray-300" 
+                  placeholder="e.g. Starbucks for $5.50" 
+                  value={note} 
+                  onChange={(e) => setNote(e.target.value)} 
+                  onKeyDown={(e) => e.key === 'Enter' && handleQuickAdd()}
+                />
               </div>
-              <button onClick={handleQuickAdd} disabled={isAnalyzing || !note} className="w-full bg-[#007AFF] text-white rounded-2xl py-4 font-bold disabled:opacity-50">AI Quick Save</button>
+              <button 
+                onClick={handleQuickAdd} 
+                disabled={isAnalyzing || !note} 
+                className={`w-full bg-[#007AFF] text-white rounded-2xl py-4 font-bold disabled:opacity-50 flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${isAnalyzing ? 'cursor-not-allowed' : ''}`}
+              >
+                <ICONS.Sparkles />
+                {isAnalyzing ? 'Analyzing Input...' : 'AI Quick Add'}
+              </button>
+              
+              <div className="relative py-2 flex items-center">
+                <div className="flex-1 border-t border-gray-200"></div>
+                <span className="px-4 text-[10px] font-black text-gray-400 uppercase tracking-widest bg-[#F2F2F7]">or manual</span>
+                <div className="flex-1 border-t border-gray-200"></div>
+              </div>
+
               <div className="flex items-center gap-4">
-                <div className="bg-white rounded-2xl p-4 flex-1 flex items-center"><span className="text-gray-300 mr-2">$</span><input type="number" className="w-full bg-transparent font-bold" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
-                <select className="bg-white p-4 rounded-2xl font-bold text-gray-700 appearance-none flex-1" value={category} onChange={(e) => setCategory(e.target.value as Category)}>
-                  {Object.values(Category).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
+                <div className="bg-white rounded-2xl p-4 flex-1 flex items-center ios-shadow"><span className="text-gray-300 font-bold mr-2">$</span><input type="number" step="0.01" className="w-full bg-transparent font-bold text-gray-900 focus:outline-none" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
+                <div className="bg-white rounded-2xl p-4 flex-1 ios-shadow relative">
+                  <select className="w-full bg-transparent font-bold text-gray-700 appearance-none focus:outline-none pr-6" value={category} onChange={(e) => setCategory(e.target.value as Category)}>
+                    {Object.values(Category).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  </div>
+                </div>
               </div>
-              <button onClick={handleManualAdd} disabled={!amount || !note} className="w-full bg-gray-900 text-white rounded-2xl py-4 font-bold disabled:opacity-50">Manual Confirm</button>
+              <button onClick={handleManualAdd} disabled={!amount || !note || isAnalyzing} className="w-full bg-gray-900 text-white rounded-2xl py-4 font-bold disabled:opacity-50 transition-all active:scale-[0.98]">Manual Confirm</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Recurring Modal */}
+      {/* Subscription Modal */}
       {isRecurringModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 animate-in fade-in duration-300" onClick={() => setIsRecurringModalOpen(false)}>
           <div className="w-full max-w-md bg-[#F2F2F7] rounded-t-[3rem] p-6 animate-in slide-in-from-bottom duration-300 ios-shadow pb-12" onClick={e => e.stopPropagation()}>
             <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6" />
-            <h2 className="text-2xl font-bold mb-6">Subscription / Recurring</h2>
+            <h2 className="text-2xl font-bold mb-6">New Subscription</h2>
             <div className="space-y-4">
               <div className="bg-white rounded-2xl p-4 ios-shadow">
-                <input className="w-full bg-transparent text-lg focus:outline-none font-medium" placeholder="Rent or Spotify" value={note} onChange={(e) => setNote(e.target.value)} />
+                <input className="w-full bg-transparent text-lg focus:outline-none font-medium" placeholder="Name (e.g. Netflix)" value={note} onChange={(e) => setNote(e.target.value)} />
               </div>
               <div className="flex items-center gap-3">
-                <div className="bg-white rounded-2xl p-4 flex-1 flex items-center"><span className="text-gray-300 mr-2">$</span><input type="number" className="w-full bg-transparent font-bold" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
-                <select className="bg-white p-4 rounded-2xl font-bold flex-1" value={frequency} onChange={(e) => setFrequency(e.target.value as any)}>
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                </select>
+                <div className="bg-white rounded-2xl p-4 flex-1 flex items-center ios-shadow"><span className="text-gray-300 mr-2">$</span><input type="number" className="w-full bg-transparent font-bold" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
+                <div className="bg-white rounded-2xl p-4 flex-1 ios-shadow relative">
+                  <select className="w-full bg-transparent font-bold appearance-none focus:outline-none pr-6" value={frequency} onChange={(e) => setFrequency(e.target.value as any)}>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  </div>
+                </div>
               </div>
-              <div className="bg-white rounded-2xl overflow-hidden ios-shadow">
-                <select className="w-full p-4 bg-transparent font-bold" value={category} onChange={(e) => setCategory(e.target.value as Category)}>
+              <div className="bg-white rounded-2xl p-4 ios-shadow relative">
+                <select className="w-full bg-transparent font-bold appearance-none focus:outline-none pr-6" value={category} onChange={(e) => setCategory(e.target.value as Category)}>
                   {Object.values(Category).map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </div>
               </div>
-              <button onClick={handleAddRecurring} disabled={!amount || !note} className="w-full bg-[#007AFF] text-white rounded-2xl py-4 font-bold disabled:opacity-50">Set Schedule</button>
+              <button onClick={handleAddRecurring} disabled={!amount || !note} className="w-full bg-[#007AFF] text-white rounded-2xl py-4 font-bold disabled:opacity-50 active:scale-[0.98]">Set Schedule</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Budget Edit Modal */}
+      {/* Budget Modal */}
       {isBudgetEditOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6 animate-in fade-in duration-300">
           <div className="w-full max-w-sm bg-white rounded-[2.5rem] p-8 animate-in zoom-in duration-200 ios-shadow">
-            <h2 className="text-2xl font-bold mb-8 text-center">Set Limit for {isBudgetEditOpen}</h2>
-            <div className="bg-gray-50 rounded-3xl p-6 flex items-center mb-8"><span className="text-3xl font-bold text-gray-300 mr-3">$</span><input type="number" autoFocus className="w-full bg-transparent text-3xl font-bold focus:outline-none" placeholder="0" value={newBudgetLimit} onChange={(e) => setNewBudgetLimit(e.target.value)} /></div>
-            <div className="flex gap-4"><button onClick={() => setIsBudgetEditOpen(null)} className="flex-1 py-4 bg-gray-100 text-gray-500 font-bold rounded-2xl">Cancel</button><button onClick={handleSaveBudget} className="flex-1 py-4 bg-[#007AFF] text-white font-bold rounded-2xl">Save</button></div>
+            <h2 className="text-2xl font-bold mb-8 text-center text-gray-900">Set {isBudgetEditOpen} Goal</h2>
+            <div className="bg-gray-50 rounded-3xl p-6 flex items-center mb-8"><span className="text-3xl font-bold text-gray-300 mr-3">$</span><input type="number" autoFocus className="w-full bg-transparent text-3xl font-bold focus:outline-none text-gray-900" placeholder="0" value={newBudgetLimit} onChange={(e) => setNewBudgetLimit(e.target.value)} /></div>
+            <div className="flex gap-4">
+              <button onClick={() => setIsBudgetEditOpen(null)} className="flex-1 py-4 bg-gray-100 text-gray-500 font-bold rounded-2xl active:scale-[0.95] transition-all">Cancel</button>
+              <button onClick={handleSaveBudget} className="flex-1 py-4 bg-[#007AFF] text-white font-bold rounded-2xl active:scale-[0.95] transition-all">Save</button>
+            </div>
           </div>
         </div>
       )}

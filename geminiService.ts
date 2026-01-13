@@ -2,79 +2,68 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction, Category } from "./types";
 
-// Safety check for API key
-const getAiClient = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    console.warn("API_KEY is missing. AI features will be disabled.");
-    return null;
-  }
-  return new GoogleGenAI({ apiKey });
-};
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const getAIInsights = async (transactions: Transaction[]) => {
-  if (transactions.length === 0) return "Add some transactions to see AI insights!";
+  if (transactions.length === 0) return "Welcome to iBudget Pro|Add expenses to start|AI insights will appear here";
   
-  const ai = getAiClient();
-  if (!ai) return "AI insights are unavailable (No API Key)|Check documentation|Manual tracking enabled";
-
-  const dataString = transactions.map(t => `${t.date}: ${t.amount} in ${t.category} (${t.note})`).join('\n');
+  const recentData = transactions.slice(0, 30).map(t => ({
+    amt: t.amount,
+    cat: t.category,
+    note: t.note,
+    type: t.type,
+    date: t.date
+  }));
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Analyze these transactions and provide 3 extremely concise, actionable financial "pro-tips" for an iOS app. 
-      Format the response as a simple list separated by pipe characters (|). 
-      Example: Reduce dining out|Check for duplicate subs|Set a transport goal.
-      Transactions: \n${dataString}`,
-      config: {
-        systemInstruction: "You are a professional financial advisor. Your tips must be under 10 words each. Focus on spending reduction and savings. No conversational filler.",
-      }
+      contents: `You are a world-class financial advisor. Analyze these transactions: ${JSON.stringify(recentData)}. 
+      Provide 3 ultra-short, highly specific financial tips or observations. 
+      Separate them ONLY with the '|' character. 
+      Keep each under 12 words. Focus on spending patterns or potential savings.`,
     });
+    
     return response.text || "Track more to see patterns|Keep saving|Stay consistent";
   } catch (error) {
-    console.error("Gemini Error:", error);
-    return "Insights temporarily unavailable|Continue tracking|AI is resting";
+    console.error("AI Insights Error:", error);
+    return "Insights temporarily unavailable|Using local processing|Stay consistent";
   }
 };
 
 export const categorizeFromText = async (text: string): Promise<{amount: number, category: Category, note: string}> => {
-  const ai = getAiClient();
-  if (!ai) {
-    // Fallback logic if AI is unavailable
-    const amountMatch = text.match(/\d+/);
-    return { 
-      amount: amountMatch ? parseFloat(amountMatch[0]) : 0, 
-      category: Category.OTHER, 
-      note: text 
-    };
-  }
-
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Extract spending details from this text: "${text}". If amount is not clear, use 0. Categories: Food & Drink, Transport, Shopping, Entertainment, Housing, Utilities, Income, Other.`,
+      model: "gemini-3-flash-preview",
+      contents: `Extract info from: "${text}". Categories: ${Object.values(Category).join(", ")}.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            amount: { type: Type.NUMBER },
-            category: { type: Type.STRING },
-            note: { type: Type.STRING }
+            amount: { type: Type.NUMBER, description: "The numeric cost found in the text" },
+            category: { type: Type.STRING, description: "The best fitting category from the provided list" },
+            note: { type: Type.STRING, description: "A clean, capitalized name for the merchant/item" }
           },
           required: ["amount", "category", "note"]
         }
       }
     });
-    const result = JSON.parse(response.text || '{}');
+
+    const result = JSON.parse(response.text || "{}");
     return {
       amount: result.amount || 0,
       category: (Object.values(Category).includes(result.category as Category) ? result.category : Category.OTHER) as Category,
       note: result.note || text
     };
   } catch (e) {
-    console.error("Gemini Categorization Error:", e);
-    return { amount: 0, category: Category.OTHER, note: text };
+    console.error("AI Categorization Error:", e);
+    // Simple local fallback regex for offline/error use
+    const amountMatch = text.match(/(\d+(\.\d+)?)/);
+    return { 
+      amount: amountMatch ? parseFloat(amountMatch[0]) : 0, 
+      category: Category.OTHER, 
+      note: text 
+    };
   }
 };
