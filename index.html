@@ -11,35 +11,17 @@
         body {
             font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
             -webkit-tap-highlight-color: transparent;
-            user-select: none;
             background-color: #F2F2F7;
             margin: 0;
             padding: 0;
-            overflow: hidden;
         }
-        #root {
-            height: 100vh;
-            width: 100vw;
-        }
-        .ios-blur {
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-        }
-        .ios-shadow {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        }
-        .safe-area-bottom {
-            padding-bottom: env(safe-area-inset-bottom);
-        }
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
+        #root { min-height: 100vh; }
+        .ios-blur { backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+        .ios-shadow { box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
-    <!-- Use esm.sh's bundle transformer to handle .tsx files in the browser -->
     <script type="importmap">
 {
   "imports": {
@@ -54,19 +36,135 @@
 </script>
 </head>
 <body class="bg-[#F2F2F7]">
-    <div id="root"></div>
-    <!-- Use Babel standalone to transpile TSX in the browser for this environment -->
+    <div id="root">
+      <div class="flex items-center justify-center h-screen">
+        <div class="animate-pulse text-[#007AFF] font-bold">iBudget Pro is loading...</div>
+      </div>
+    </div>
+
+    <!-- Use Babel for in-browser transpilation of the TSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script type="text/babel" data-type="module" data-presets="typescript,react">
-        import React from 'react';
+        import React, { useState, useEffect, useMemo } from 'react';
         import ReactDOM from 'react-dom/client';
-        import App from './App.tsx';
+        import { GoogleGenAI, Type } from "@google/genai";
+        import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
-        const rootElement = document.getElementById('root');
-        if (rootElement) {
-            const root = ReactDOM.createRoot(rootElement);
-            root.render(<App />);
-        }
+        // --- Types & Constants ---
+        const Category = {
+          FOOD: 'Food & Drink',
+          TRANSPORT: 'Transport',
+          SHOPPING: 'Shopping',
+          ENTERTAINMENT: 'Entertainment',
+          HOUSING: 'Housing',
+          UTILITIES: 'Utilities',
+          INCOME: 'Income',
+          OTHER: 'Other'
+        };
+
+        const COLORS = {
+          blue: '#007AFF', green: '#34C759', red: '#FF3B30', orange: '#FF9500',
+          indigo: '#5856D6', pink: '#FF2D55', gray: '#8E8E93'
+        };
+
+        const ICONS = {
+          Plus: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>,
+          Chart: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 20V10"></path><path d="M12 20V4"></path><path d="M6 20v-6"></path></svg>,
+          Wallet: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path></svg>,
+          History: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>,
+          Sparkles: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path></svg>,
+          Target: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>
+        };
+
+        // --- App Component ---
+        const App = () => {
+          const [activeTab, setActiveTab] = useState('home');
+          const [transactions, setTransactions] = useState([]);
+          const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+          const [note, setNote] = useState('');
+          const [amount, setAmount] = useState('');
+
+          useEffect(() => {
+            const saved = localStorage.getItem('transactions');
+            if (saved) setTransactions(JSON.parse(saved));
+          }, []);
+
+          useEffect(() => {
+            localStorage.setItem('transactions', JSON.stringify(transactions));
+          }, [transactions]);
+
+          const totalBalance = transactions.reduce((acc, t) => t.type === 'income' ? acc + t.amount : acc - t.amount, 0);
+
+          const handleAdd = () => {
+            if (!note || !amount) return;
+            const newTx = {
+              id: Date.now().toString(),
+              amount: parseFloat(amount),
+              note: note,
+              category: Category.OTHER,
+              date: new Date().toISOString(),
+              type: 'expense'
+            };
+            setTransactions([newTx, ...transactions]);
+            setIsAddModalOpen(false);
+            setNote('');
+            setAmount('');
+          };
+
+          return (
+            <div className="flex flex-col h-screen max-w-md mx-auto bg-[#F2F2F7] overflow-hidden relative border-x border-gray-200 shadow-2xl">
+              <header className="pt-14 pb-6 px-6 bg-white/80 ios-blur sticky top-0 z-20 border-b border-gray-100">
+                <div className="flex justify-between items-end">
+                  <div>
+                    <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Balance</h2>
+                    <h1 className="text-3xl font-bold text-gray-900 mt-1">${totalBalance.toFixed(2)}</h1>
+                  </div>
+                  <button onClick={() => setIsAddModalOpen(true)} className="w-10 h-10 rounded-full bg-[#007AFF] flex items-center justify-center text-white shadow-lg"><ICONS.Plus /></button>
+                </div>
+              </header>
+
+              <main className="flex-1 overflow-y-auto pb-24 px-6">
+                <div className="mt-6">
+                  <h3 className="text-lg font-bold text-gray-800 mb-4">Transactions</h3>
+                  {transactions.length === 0 ? (
+                    <div className="p-12 text-center text-gray-400 font-medium">No activity yet</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {transactions.map(t => (
+                        <div key={t.id} className="bg-white p-4 rounded-2xl flex justify-between items-center ios-shadow">
+                          <div>
+                            <div className="font-bold text-gray-900">{t.note}</div>
+                            <div className="text-[10px] text-gray-400 uppercase font-black">{new Date(t.date).toLocaleDateString()}</div>
+                          </div>
+                          <div className="font-bold">-${t.amount.toFixed(2)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </main>
+
+              <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/90 ios-blur border-t border-gray-200 flex justify-around safe-area-bottom pt-3 pb-2 z-20">
+                <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center ${activeTab === 'home' ? 'text-[#007AFF]' : 'text-gray-400'}`}><ICONS.Wallet /><span className="text-[10px] mt-1 font-bold">Home</span></button>
+                <button onClick={() => setActiveTab('stats')} className={`flex flex-col items-center ${activeTab === 'stats' ? 'text-[#007AFF]' : 'text-gray-400'}`}><ICONS.Chart /><span className="text-[10px] mt-1 font-bold">Stats</span></button>
+              </nav>
+
+              {isAddModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0" onClick={() => setIsAddModalOpen(false)}>
+                  <div className="w-full max-w-md bg-[#F2F2F7] rounded-t-[2.5rem] p-8 pb-12 ios-shadow" onClick={e => e.stopPropagation()}>
+                    <h2 className="text-2xl font-bold mb-6">New Expense</h2>
+                    <input className="w-full bg-white p-4 rounded-2xl mb-4 focus:outline-none ios-shadow font-medium" placeholder="Description" value={note} onChange={e => setNote(e.target.value)} />
+                    <input type="number" className="w-full bg-white p-4 rounded-2xl mb-6 focus:outline-none ios-shadow font-bold text-xl" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} />
+                    <button onClick={handleAdd} className="w-full bg-[#007AFF] text-white py-4 rounded-2xl font-bold active:scale-95 transition-transform">Add Transaction</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html>
