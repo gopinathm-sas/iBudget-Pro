@@ -1,0 +1,7 @@
+{
+  "name": "iBudget Pro",
+  "description": "A sleek, iOS-inspired budget and expense tracker with AI-driven insights, visual analytics, and smart categorization.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
