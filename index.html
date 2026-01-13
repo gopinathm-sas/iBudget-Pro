@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>iBudget Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -13,6 +13,8 @@
             -webkit-tap-highlight-color: transparent;
             user-select: none;
             background-color: #F2F2F7;
+            margin: 0;
+            padding: 0;
         }
         .ios-blur {
             backdrop-filter: blur(20px);
@@ -23,6 +25,14 @@
         }
         .safe-area-bottom {
             padding-bottom: env(safe-area-inset-bottom);
+        }
+        /* Custom scrollbar for a cleaner iOS look */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
         }
     </style>
 <script type="importmap">
@@ -37,7 +47,8 @@
 }
 </script>
 </head>
-<body class="bg-gray-50 text-black">
+<body class="bg-[#F2F2F7] text-black">
     <div id="root"></div>
+    <script type="module" src="./index.tsx"></script>
 </body>
 </html>

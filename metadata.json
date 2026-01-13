@@ -1,7 +1,8 @@
 {
   "name": "iBudget Pro",
-  "description": "A sleek, iOS-inspired budget and expense tracker with AI-driven insights, visual analytics, and smart categorization.",
-  "requestFramePermissions": [
-    "camera"
-  ]
+  "short_name": "iBudget",
+  "description": "Exclusive personal iOS-style budget tracker with Gemini AI insights.",
+  "requestFramePermissions": [],
+  "theme_color": "#F2F2F7",
+  "background_color": "#F2F2F7"
 }
